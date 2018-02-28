@@ -1,0 +1,159 @@
+#include "FATFileSystem.h"
+#include "SDBlockDevice.h"
+#include <cctype>
+
+// debbuging (diody na sterowniku)
+DigitalOut led1(LED1);
+DigitalOut led2(LED2);
+DigitalOut led3(LED3);
+DigitalOut led4(LED4);
+
+// debbuging (diody zewnetrzne)
+DigitalOut ledCzerwona(p26);
+DigitalOut ledZolta(p25);
+
+// Serial dla PC
+Serial pc(USBTX, USBRX);
+
+// dla RS232
+Serial uart(p13, p14);
+DigitalOut RTSwyjscieRS(p22);
+DigitalIn CTSwejscieRS(p17);
+
+// internety
+EthernetInterface eth;
+Ethernet ether;
+TCPSocket sock;
+
+// karta SD
+SDBlockDevice sd(p5,p6,p7,p9);
+FATFileSystem fs("sd", &sd);
+
+// FTP
+
+
+
+int CheckMbedIsStillAlive(int *i){
+    
+    if(*i%30000 == 0){
+        led1 = 1; 
+    }else{
+        led1 = 0;
+    }
+    if(*i >= 90000){
+        *i = 0;
+    }
+        
+    return *i;
+}
+
+void ReconnectIfNoNet(){
+    
+    pc.printf("\n INTERNET IS UNAVAILABLE, BUT I'M TRYING TO CONNECT ANYWAY... \n");
+    led4 = 1; ledCzerwona = 1; ledZolta = 1;
+    eth.connect(); 
+    wait(1);
+    led4 = 0; ledCzerwona = 0; ledZolta = 0;
+}
+
+//wysyla program na serwer
+void Send_From_SD_to_Server(string ProgramName, char *server_ip, int port, string user_name, string pass, string path, string extension){ // po zapisaniu pliku na SD nastepuje jego wyslanie na Server
+    
+    string request = "";
+    int conn = -1;
+    char cmdArray[300];
+//    char *portString;
+//    sprintf(portString, "%d", port);
+    
+    // polacz z Serverem
+    pc.printf("\n I'M OPENING THE SOCKET! \n");
+    sock.open(&eth);
+    //conn = sock.connect(server_ip, port);
+    conn = sock.connect("192.168.90.123", 80);
+    if(conn == 0){
+        pc.printf("\n SOCKET OPENED \n");
+        led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0;
+    }else{
+        pc.printf("\n SOCKET IS UNAVAILABLE \n");
+        led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0; wait(0.5); 
+        led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0; wait(0.5); 
+        led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0;
+    }
+    
+    //wysylanie pliku
+    request = "GET /send_file_to_server.php?user_name=C100&pass=1234&server_ip=192.168.90.39&port=21&program_name=1551&path=/sd/receivedFromMachine/&extension=.txt HTTP/1.0\r\n\r\n";
+    
+    strcpy(cmdArray, request.c_str());
+    sock.send(cmdArray, sizeof(cmdArray));
+    
+    pc.printf("%s",request);
+    pc.printf("\n");
+    
+    // jesli jest polaczenie z serwerem, to skasuj plik z SD/receivedFromMachine, jesli nie, nie kasuj
+    
+    
+       
+    // zamknij polaczenie z Serverem
+    sock.close();
+    pc.printf("\n OK, I CLOSED IT, CYA \n");
+}
+
+// szuka nazwy w zapisanym pliku (szuka pierwszych 4 cyfr w programie i traktuje je jako jego nazwe)
+string RenameFile(string path, string extension){
+    
+    char c = 'a';
+    string programName = "";
+    FILE *file;
+    file = fopen((path + "NazwaPliku" + extension).c_str(), "r");
+    if(file == NULL) {
+        NVIC_SystemReset();
+        error("Could not open file for write\n");
+    }
+    while(!feof(file)){
+        c = fgetc(file);
+        if(isdigit(c)){
+            programName = programName + c;
+            if(programName.length() == 4){
+                fclose(file);
+                break;
+            }
+        }
+    }
+    
+    rename((path + "NazwaPliku" + extension).c_str(), (path + programName + "WithTildas" + extension).c_str());
+    
+    return programName;
+    
+}
+
+// dla programow Siemensowych - usuwa znaki tyldy na poczatku i koncu programu
+void RemoveTildas(string programName, string path, string extension){
+
+    FILE *fileOld;
+    FILE *fileNew;
+    char c = 'a';
+    
+    fileOld = fopen((path + programName + "WithTildas" + extension).c_str(), "r");
+    if(fileOld == NULL) {
+        NVIC_SystemReset();
+        error("Could not open file for write\n");
+    }
+  
+    fileNew = fopen((path + programName + extension).c_str(), "w");
+    if(fileNew == NULL) {
+        NVIC_SystemReset();
+        error("Could not open file for write\n");
+    }
+    
+    while(!feof(fileOld)){
+        c = fgetc(fileOld);
+        if(c != '~'){
+            fputc(c, fileNew);
+        }    
+    }
+    fclose(fileNew);
+    fclose(fileOld);
+    
+    remove((path + programName + "WithTildas" + extension).c_str());
+
+}

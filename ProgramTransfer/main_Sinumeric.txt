@@ -1,0 +1,107 @@
+#include <string>
+#include "mbed.h"
+#include "EthernetInterface.h"
+#include "methods.h"
+#include "Socket.h"
+#include "TCPSocket.h"
+
+#define rts p22
+#define cts p17
+
+int main() {
+    
+    int i = 0;
+    char a = 'a';
+    string a1 = "a";
+    string signal = "aaaaa";
+    bool WriteOnSDFlag = false; // jesli jest sygnal od maszyny, ze zaczyna nadawanie (w Scharmannie: duzo znakow NULL na poczatku) to flaga = true, jesli jest sygnal od maszyny, ze konczy nadawanie (w Scharmannie: tez duzo znakow NULL na koncu) to flaga = false
+    string ProgramName = "";
+    FILE *fp;
+    string user = "C100";
+    string pass = "1234";
+    char *server_ip = "192.168.90.39";
+    int port = 80;
+    string extension = ".txt";
+    string SD_rec_From_Machine_Path = "/sd/receivedFromMachine/";
+    
+    // polacz z netem
+    eth.connect();
+    
+    pc.printf("MAC: "); pc.printf(eth.get_mac_address()); pc.printf("IP: "); pc.printf(eth.get_ip_address());
+    
+    // jesli jest polaczenie z netem, to mrugnij szybko pierwsza dioda
+    // jesli nie ma polaczenia z netem, to zapal diody od 1 do 4 i je wygas
+    if(ether.link()){
+        led1=1; wait(0.1); led1=0; wait(0.1); led1=1; wait(0.1); led1=0; wait(0.1); led1=1; wait(0.1); led1=0; wait(0.1);
+    }else{
+        led1=1; wait(0.1); led2=1; wait(0.1); led3=1; wait(0.1); led4=1; wait(0.1); 
+        led4=0; wait(0.1); led3=0; wait(0.1); led2=0; wait(0.1); led1=0; wait(0.1); 
+    }
+    
+    // ustawienie RS232
+    uart.baud(2400);
+    uart.set_flow_control(Serial::RTSCTS, rts, cts); 
+    uart.format(7, Serial::Even, 2);
+    
+    uart.printf("Jestem dobrym UARTEM");
+    pc.printf("Jestem dobrym PCtem");
+    //
+    //
+    //
+    //
+    //
+    while(1) {
+        
+        i++;
+        i = CheckMbedIsStillAlive(&i); // mrugnij czasem dioda 1, zeby pokazac, ze sterownik zyje i ma sie dobrze
+        
+        while(!ether.link()){ // sprawdzaj czy jest net, jak nie, to sprobuj polaczyc i zapal led4, czerwona i zolta, a jesli sie polaczysz, to wygas ledy
+            ReconnectIfNoNet();
+        }
+            
+        if(pc.readable()) {       // sprawdza czy jest cos na pinie tx (true, gdy wysylamy dane z PC na maszyne)
+            a = pc.getc();              
+            uart.putc(a);                
+            pc.printf("%c",a);        
+        }
+        
+        if(uart.readable()) {    // sprawdza czy jest cos na pinie rx w mbedzie (true, gdy wysylamy dane z maszyny na PC)
+            a = uart.getc();
+            if(a == NULL){ // zamiana NULL na '~' (inaczej nie widac nic na terminalu, poza tym lepiej sie testuje)
+                a = '~';
+            }
+            //uart.printf("%c",a);
+            pc.printf("%c",a);
+            
+            // wychwytuje sygnaly komunikacyjne (np. sygnal startu/konca nadawania (5xNULL dla Scharmanna), sygnaly komunikacyjne (np. program sciagajacy programy z serwera %5002 lub O5002) itp.)
+            //pc.printf("\n signal: %s \n", signal);
+            a1 = string(1, a);
+            signal = signal + a1;
+            signal = signal.substr(1,6);
+            
+            // sygnal rozpoczecia lub zakonczenia transmisji danych (wg Siemensa)
+            if(signal == "~~~~~"){
+                signal = "aaaaa";
+                pc.printf("A LOT OF NULLS!");
+                WriteOnSDFlag = !WriteOnSDFlag; // zmienna odpowiedzialna za "wyczucie" czy to poczatek pliku (pierwsza seria NULLi), czy koniec pliku (druga seria NULLi) 
+                if(WriteOnSDFlag){ // jesli NULLe na poczatku, to tworzy lub otwiera plik
+                    fp = fopen((SD_rec_From_Machine_Path+"NazwaPliku"+extension).c_str(), "w"); // jesli nie ma, to stworz plik, jesli jest, to dodaj kolejne znaki.
+                    if(fp == NULL) {
+                        NVIC_SystemReset();
+                    }
+                    pc.printf("FILE OPENED");
+                }else{ // jesli NULLe na koncu, to zamyka plik + zaczyna procedure wysylania programu z SD na serwer
+                    fclose(fp);
+                    ProgramName = RenameFile(SD_rec_From_Machine_Path, extension);
+                    RemoveTildas(ProgramName, SD_rec_From_Machine_Path, extension);
+                    pc.printf("FILE IS ON SD");
+                    Send_From_SD_to_Server(ProgramName, server_ip, port, user, pass, SD_rec_From_Machine_Path, extension);
+                }
+            }
+            // jesli plik jest otwarty, to kolejne znaki zapisuj do pliku na SD
+            if(WriteOnSDFlag){
+                fprintf(fp,"%c", a);
+            }        
+        }
+    }
+}
