@@ -8,9 +8,12 @@
 #define rts p22
 #define cts p17
 
+
 int main() {
     
+    DigitalOut tex(p13);
     int i = 0;
+    int x = 0;
     char a = 'a';
     string a1 = "a";
     string signal = "aaaaa";
@@ -52,6 +55,7 @@ int main() {
     //
     while(1) {
         
+//        t.start();
         i++;
         i = CheckMbedIsStillAlive(&i); // mrugnij czasem dioda 1, zeby pokazac, ze sterownik zyje i ma sie dobrze
         
@@ -59,14 +63,21 @@ int main() {
             ReconnectIfNoNet();
         }
             
-        if(pc.readable()) {       // sprawdza czy jest cos na pinie tx (true, gdy wysylamy dane z PC na maszyne)
-            a = pc.getc();              
-            uart.putc(a);                
-            pc.printf("%c",a);        
+        if(pc.readable()) {       // sprawdza czy jest cos na pinie PC rx w mbedzie (true, gdy wysylamy dane z PC na maszyne)
+            a = pc.getc();
+            uart.putc(a);           
         }
         
-        if(uart.readable()) {    // sprawdza czy jest cos na pinie rx w mbedzie (true, gdy wysylamy dane z maszyny na PC)
+        pc.printf("%d\n", tex);
+        
+//        while(!uart.writeable()){
+//            //a = uart.getc();    
+//            pc.printf("%d", x++);
+//        }
+        
+        if(uart.readable()) {    // sprawdza czy jest cos na pinie UART rx w mbedzie (true, gdy wysylamy dane z maszyny na PC)
             a = uart.getc();
+            pc.printf("%s", "DUPA");
             if(a == NULL){ // zamiana NULL na '~' (inaczej nie widac nic na terminalu, poza tym lepiej sie testuje)
                 a = '~';
             }
@@ -95,12 +106,19 @@ int main() {
                     ProgramName = RenameFile(SD_rec_From_Machine_Path, extension);
                     RemoveTildas(ProgramName, SD_rec_From_Machine_Path, extension);
                     pc.printf("FILE IS ON SD");
-                    Send_From_SD_to_Server(ProgramName, server_ip, port, user, pass, SD_rec_From_Machine_Path, extension);
+                    //Send_From_SD_to_Server(ProgramName, server_ip, port, user, pass, SD_rec_From_Machine_Path, extension);
+                    Send_From_SD_to_Server_HTTP(ProgramName, server_ip, port, user, pass, SD_rec_From_Machine_Path, extension);
                 }
             }
+            
             // jesli plik jest otwarty, to kolejne znaki zapisuj do pliku na SD
             if(WriteOnSDFlag){
                 fprintf(fp,"%c", a);
+            }
+            
+            // sygnal do zrzucenia wszystkich plikow z SD/receiveFromMachine na Server/receiveFromMachine 
+            if(signal == "O5003"){
+                PushFromSDToServer(SD_rec_From_Machine_Path, server_ip, port);
             }        
         }
     }

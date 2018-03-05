@@ -1,6 +1,7 @@
 #include "FATFileSystem.h"
 #include "SDBlockDevice.h"
 #include <cctype>
+#include <vector>
 
 // debbuging (diody na sterowniku)
 DigitalOut led1(LED1);
@@ -56,46 +57,109 @@ void ReconnectIfNoNet(){
     led4 = 0; ledCzerwona = 0; ledZolta = 0;
 }
 
-//wysyla program na serwer
-void Send_From_SD_to_Server(string ProgramName, char *server_ip, int port, string user_name, string pass, string path, string extension){ // po zapisaniu pliku na SD nastepuje jego wyslanie na Server
+//wysyla program na serwer przez HTTP
+void Send_From_SD_to_Server_HTTP (string ProgramName, char *server_ip, int port, string user_name, string pass, string path, string extension){
     
+    FILE *file;
+    string line = "";
     string request = "";
+    char array[500] = "";
+    char c = 'a';
     int conn = -1;
-    char cmdArray[300];
-//    char *portString;
-//    sprintf(portString, "%d", port);
+    sock.set_timeout(5000);
     
-    // polacz z Serverem
+    //usun plik z Servera, jesli taki juz istnieje (i jest polaczenie z Serverem)
+    
+    pc.printf("DELETE IF EXIST \n");
     pc.printf("\n I'M OPENING THE SOCKET! \n");
     sock.open(&eth);
-    //conn = sock.connect(server_ip, port);
-    conn = sock.connect("192.168.90.123", 80);
+    conn = sock.connect(server_ip, port);
     if(conn == 0){
+    
         pc.printf("\n SOCKET OPENED \n");
         led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0;
+        
+        request = "GET /delete_if_exist.php?program_name=" + ProgramName + "&extension=" + extension + " HTTP/1.0\r\n\r\n";
+        strcpy(array, request.c_str());
+        sock.send(array, sizeof(array));  
+          
     }else{
+        
         pc.printf("\n SOCKET IS UNAVAILABLE \n");
         led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0; wait(0.5); 
         led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0; wait(0.5); 
         led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0;
+    
+    }
+    sock.close();
+    pc.printf("\n OK, I CLOSED IT, CYA \n"); 
+    
+    // otworz plik na SD
+    
+    pc.printf("OPEN A FILE \n");
+    file = fopen((path + ProgramName + extension).c_str(), "r");
+    if(file == NULL) {
+        NVIC_SystemReset();
+        error("Could not open file for write\n");
     }
     
-    //wysylanie pliku
-    request = "GET /send_file_to_server.php?user_name=C100&pass=1234&server_ip=192.168.90.39&port=21&program_name=1551&path=/sd/receivedFromMachine/&extension=.txt HTTP/1.0\r\n\r\n";
+    while(!feof(file)){
+        c = fgetc(file);
+        if(c != 13){
+            if(c == 32){
+                c = '~';
+            }
+            line += c;
+        }
+
+        if(c == 13){
+            pc.printf("%s", line);
+            pc.printf("\n");
+            //request = "GET /send_file_to_server_HTTP.php?program_name=1551&extension=.txt&line=%MPF1551 HTTP/1.0\r\n\r\n";
+            request = "GET /send_file_to_server_HTTP.php?program_name=" + ProgramName + "&extension=" + extension + "&line=" + line + " HTTP/1.0\r\n\r\n";
+            pc.printf("%s", request);
+            pc.printf("\n");
+            strcpy(array, request.c_str());
+            pc.printf("%s", array);
+            pc.printf("\n");
+            
+            // otworz polaczenie z Serverem
+            
+            pc.printf("\n I'M OPENING THE SOCKET! \n");
+            sock.open(&eth);
+            conn = sock.connect(server_ip, port);
+            
+            if(conn == 0){
+                pc.printf("\n SOCKET OPENED \n");
+                led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0;
+            }else{
+                pc.printf("\n SOCKET IS UNAVAILABLE \n");
+                led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0; wait(0.5); 
+                led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0; wait(0.5); 
+                led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0;
+            }
+            pc.printf("SOCK IS: ");
+            pc.printf("%d", conn);
+            pc.printf("\n");
+            
+            sock.send(array, sizeof(array)); // wysyla linie z pliku
+            
+            // zamknij polaczenie z Serverem
+            sock.close();
+            pc.printf("\n OK, I CLOSED IT, CYA \n"); 
+            
+            line = "";
+        }
+    }
     
-    strcpy(cmdArray, request.c_str());
-    sock.send(cmdArray, sizeof(cmdArray));
+    if(conn==0){
+        //jesli jest polaczenie z Serverem, to usun tez plik z SD
+        remove((path + ProgramName + extension).c_str());        
+    }
     
-    pc.printf("%s",request);
-    pc.printf("\n");
+    fclose(file);
+    pc.printf("FILE CLOSED");
     
-    // jesli jest polaczenie z serwerem, to skasuj plik z SD/receivedFromMachine, jesli nie, nie kasuj
-    
-    
-       
-    // zamknij polaczenie z Serverem
-    sock.close();
-    pc.printf("\n OK, I CLOSED IT, CYA \n");
 }
 
 // szuka nazwy w zapisanym pliku (szuka pierwszych 4 cyfr w programie i traktuje je jako jego nazwe)
@@ -157,3 +221,36 @@ void RemoveTildas(string programName, string path, string extension){
     remove((path + programName + "WithTildas" + extension).c_str());
 
 }
+
+//przerzuca wszystkie pliki z SD/reveiveFromMachine do Server/receiveFromMachine (nadpisuje wszystkie powtarzajace sie pliki)
+void PushFromSDToServer(string path, char *server_ip, int port){
+        
+    string request = "";
+    char array[300] = "";
+    vector<string> filenames;
+    int conn = -1;
+        
+    // polacz z Serverem
+    pc.printf("\n I'M OPENING THE SOCKET! \n");
+    sock.open(&eth);
+    conn = sock.connect(server_ip, port);
+    
+    if(conn == 0){
+        pc.printf("\n SOCKET OPENED \n");
+        led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0;
+    }else{
+        pc.printf("\n SOCKET IS UNAVAILABLE \n");
+        led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0; wait(0.5); 
+        led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0; wait(0.5); 
+        led2 = 1; ledCzerwona = 1; ledZolta = 1; wait(0.5); led2 = 0; ledCzerwona = 0; ledZolta = 0;
+    }
+    
+    request = "";
+    strcpy(array, request.c_str());
+    sock.send(array, sizeof(array));
+    
+    //stworz liste plikow przechowywanych na SD/receiveFromMachine
+
+    
+}
+
