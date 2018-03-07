@@ -11,18 +11,17 @@
 
 int main() {
     
-    DigitalOut tex(p13);
     int i = 0;
     int x = 0;
     char a = 'a';
     string a1 = "a";
-    string signal = "aaaaa";
+    string signal = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     bool WriteOnSDFlag = false; // jesli jest sygnal od maszyny, ze zaczyna nadawanie (w Scharmannie: duzo znakow NULL na poczatku) to flaga = true, jesli jest sygnal od maszyny, ze konczy nadawanie (w Scharmannie: tez duzo znakow NULL na koncu) to flaga = false
     string ProgramName = "";
     FILE *fp;
     string user = "C100";
     string pass = "1234";
-    char *server_ip = "192.168.90.39";
+    char *server_ip = "192.168.90.38";
     int port = 80;
     string extension = ".txt";
     string SD_rec_From_Machine_Path = "/sd/receivedFromMachine/";
@@ -42,7 +41,7 @@ int main() {
     }
     
     // ustawienie RS232
-    uart.baud(2400);
+    uart.baud(1200);
     uart.set_flow_control(Serial::RTSCTS, rts, cts); 
     uart.format(7, Serial::Even, 2);
     
@@ -68,16 +67,9 @@ int main() {
             uart.putc(a);           
         }
         
-        pc.printf("%d\n", tex);
-        
-//        while(!uart.writeable()){
-//            //a = uart.getc();    
-//            pc.printf("%d", x++);
-//        }
-        
         if(uart.readable()) {    // sprawdza czy jest cos na pinie UART rx w mbedzie (true, gdy wysylamy dane z maszyny na PC)
+            
             a = uart.getc();
-            pc.printf("%s", "DUPA");
             if(a == NULL){ // zamiana NULL na '~' (inaczej nie widac nic na terminalu, poza tym lepiej sie testuje)
                 a = '~';
             }
@@ -88,11 +80,11 @@ int main() {
             //pc.printf("\n signal: %s \n", signal);
             a1 = string(1, a);
             signal = signal + a1;
-            signal = signal.substr(1,6);
+            signal = signal.substr(1,101);
             
             // sygnal rozpoczecia lub zakonczenia transmisji danych (wg Siemensa)
-            if(signal == "~~~~~"){
-                signal = "aaaaa";
+            if(signal == "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"){
+                signal = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
                 pc.printf("A LOT OF NULLS!");
                 WriteOnSDFlag = !WriteOnSDFlag; // zmienna odpowiedzialna za "wyczucie" czy to poczatek pliku (pierwsza seria NULLi), czy koniec pliku (druga seria NULLi) 
                 if(WriteOnSDFlag){ // jesli NULLe na poczatku, to tworzy lub otwiera plik

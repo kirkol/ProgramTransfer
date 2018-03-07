@@ -66,7 +66,6 @@ void Send_From_SD_to_Server_HTTP (string ProgramName, char *server_ip, int port,
     char array[500] = "";
     char c = 'a';
     int conn = -1;
-    sock.set_timeout(5000);
     
     //usun plik z Servera, jesli taki juz istnieje (i jest polaczenie z Serverem)
     
@@ -105,14 +104,15 @@ void Send_From_SD_to_Server_HTTP (string ProgramName, char *server_ip, int port,
     
     while(!feof(file)){
         c = fgetc(file);
-        if(c != 13){
+    
+        if(c != 13 && c != 10){
             if(c == 32){
                 c = '~';
             }
             line += c;
         }
 
-        if(c == 13){
+        if(c == 13 || c ==10){
             pc.printf("%s", line);
             pc.printf("\n");
             //request = "GET /send_file_to_server_HTTP.php?program_name=1551&extension=.txt&line=%MPF1551 HTTP/1.0\r\n\r\n";
@@ -154,7 +154,7 @@ void Send_From_SD_to_Server_HTTP (string ProgramName, char *server_ip, int port,
     
     if(conn==0){
         //jesli jest polaczenie z Serverem, to usun tez plik z SD
-        remove((path + ProgramName + extension).c_str());        
+        //remove((path + ProgramName + extension).c_str());        
     }
     
     fclose(file);
