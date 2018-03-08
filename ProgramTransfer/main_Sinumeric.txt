@@ -8,23 +8,32 @@
 #define rts p22
 #define cts p17
 
+// UWAGI DO PROGRAMU DLA SINUMERICA
+// %O5002 - nazwa programu, w ktorym umieszcza sie nr programu, ktory chcemy sciagnac z servera (UWAGA: wczesniej bylo %5002! Teraz jest to nr niedopuszczalny)
+
+// wzor programu 5002 (Sinumeric)
+// %O5002
+// S (1234)  - w parametrze S wpisujemy nr programu, ktory chcemy sciagnac z Servera, tu: 1234
+// M30
+
+
 
 int main() {
     
     int i = 0;
-    int x = 0;
+    int j = 0;
     char a = 'a';
     string a1 = "a";
-    string signal = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    string signal = "aaaaa";
     bool WriteOnSDFlag = false; // jesli jest sygnal od maszyny, ze zaczyna nadawanie (w Scharmannie: duzo znakow NULL na poczatku) to flaga = true, jesli jest sygnal od maszyny, ze konczy nadawanie (w Scharmannie: tez duzo znakow NULL na koncu) to flaga = false
     string ProgramName = "";
     FILE *fp;
-    string user = "C100";
-    string pass = "1234";
     char *server_ip = "192.168.90.38";
     int port = 80;
     string extension = ".txt";
     string SD_rec_From_Machine_Path = "/sd/receivedFromMachine/";
+    string requestedProgram = "";
+    bool RequestForProgramFlag = false; // jesli jest sygnal od maszyny, ze wywolano program O5002 lub %5002, to flaga = true.
     
     // polacz z netem
     eth.connect();
@@ -41,7 +50,7 @@ int main() {
     }
     
     // ustawienie RS232
-    uart.baud(1200);
+    uart.baud(2400);
     uart.set_flow_control(Serial::RTSCTS, rts, cts); 
     uart.format(7, Serial::Even, 2);
     
@@ -54,7 +63,6 @@ int main() {
     //
     while(1) {
         
-//        t.start();
         i++;
         i = CheckMbedIsStillAlive(&i); // mrugnij czasem dioda 1, zeby pokazac, ze sterownik zyje i ma sie dobrze
         
@@ -73,18 +81,25 @@ int main() {
             if(a == NULL){ // zamiana NULL na '~' (inaczej nie widac nic na terminalu, poza tym lepiej sie testuje)
                 a = '~';
             }
-            //uart.printf("%c",a);
             pc.printf("%c",a);
             
             // wychwytuje sygnaly komunikacyjne (np. sygnal startu/konca nadawania (5xNULL dla Scharmanna), sygnaly komunikacyjne (np. program sciagajacy programy z serwera %5002 lub O5002) itp.)
             //pc.printf("\n signal: %s \n", signal);
             a1 = string(1, a);
             signal = signal + a1;
-            signal = signal.substr(1,101);
+            signal = signal.substr(1,6);
+            
+            // licz ile razy pojawil sie sygnal ~~~~~
+            // jesli pojawil sie 100 razy, to znaczy, ze zaczela sie transmisja, jesli pojawil znowu, to znaczy, ze transmisja sie zakonczyla
+            if(signal == "~~~~~"){
+                j++;
+            }else{
+                j = 0;
+            }
             
             // sygnal rozpoczecia lub zakonczenia transmisji danych (wg Siemensa)
-            if(signal == "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"){
-                signal = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            if(j==100){
+                signal = "aaaaa";
                 pc.printf("A LOT OF NULLS!");
                 WriteOnSDFlag = !WriteOnSDFlag; // zmienna odpowiedzialna za "wyczucie" czy to poczatek pliku (pierwsza seria NULLi), czy koniec pliku (druga seria NULLi) 
                 if(WriteOnSDFlag){ // jesli NULLe na poczatku, to tworzy lub otwiera plik
@@ -93,13 +108,13 @@ int main() {
                         NVIC_SystemReset();
                     }
                     pc.printf("FILE OPENED");
-                }else{ // jesli NULLe na koncu, to zamyka plik + zaczyna procedure wysylania programu z SD na serwer
+                }
+                if(!WriteOnSDFlag && !RequestForProgramFlag){ // jesli NULLe na koncu, to zamyka plik + zaczyna procedure wysylania programu z SD na serwer
                     fclose(fp);
                     ProgramName = RenameFile(SD_rec_From_Machine_Path, extension);
                     RemoveTildas(ProgramName, SD_rec_From_Machine_Path, extension);
                     pc.printf("FILE IS ON SD");
-                    //Send_From_SD_to_Server(ProgramName, server_ip, port, user, pass, SD_rec_From_Machine_Path, extension);
-                    Send_From_SD_to_Server_HTTP(ProgramName, server_ip, port, user, pass, SD_rec_From_Machine_Path, extension);
+                    Send_From_SD_to_Server_HTTP(ProgramName, server_ip, port, SD_rec_From_Machine_Path, extension);
                 }
             }
             
@@ -108,10 +123,25 @@ int main() {
                 fprintf(fp,"%c", a);
             }
             
-            // sygnal do zrzucenia wszystkich plikow z SD/receiveFromMachine na Server/receiveFromMachine 
-            if(signal == "O5003"){
-                PushFromSDToServer(SD_rec_From_Machine_Path, server_ip, port);
-            }        
+            // sygnal do pobrania pliku z Servera (w tresci programu 5002 musi znajdowac sie nr programu, ktory chcemy pobrac)
+            if(signal == "O5002"){
+                RequestForProgramFlag = true;
+                fclose(fp);
+                a = 'a';
+            }
+            if(RequestForProgramFlag){
+                if(isdigit(a)){
+                    requestedProgram = requestedProgram + a;
+                }
+                if(requestedProgram.length() == 4){
+                    AskServerForProgram(requestedProgram, server_ip, port);
+                    pc.printf("NR PROGRAMU: %s \n",requestedProgram);
+                    requestedProgram = "";
+                    RequestForProgramFlag = false;  
+                }
+            }
+            
+                    
         }
     }
 }
