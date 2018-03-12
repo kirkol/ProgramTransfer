@@ -32,6 +32,8 @@ int main() {
     int port = 80;
     string extension = ".txt";
     string SD_rec_From_Machine_Path = "/sd/receivedFromMachine/";
+    string SD_sent_To_Machine_Path = "/sd/sentToMachine/";
+    string SD_archive = "/sd/Archive/";
     string requestedProgram = "";
     bool RequestForProgramFlag = false; // jesli jest sygnal od maszyny, ze wywolano program O5002 lub %5002, to flaga = true.
     
@@ -134,10 +136,10 @@ int main() {
                     requestedProgram = requestedProgram + a;
                 }
                 if(requestedProgram.length() == 4){
-                    AskServerForProgram(requestedProgram, server_ip, port);
-                    pc.printf("NR PROGRAMU: %s \n",requestedProgram);
+                    AskServerForProgram(requestedProgram, server_ip, port, extension, SD_sent_To_Machine_Path, SD_archive);
                     requestedProgram = "";
                     RequestForProgramFlag = false;  
+                    WriteOnSDFlag = false; // ta instrukcja zostala dodana, poniewaz AskServerForProgram trwa zbyt dlugo i sterownik nie wychwytuje NULLi konczacych program
                 }
             }
             
