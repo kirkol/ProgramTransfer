@@ -296,8 +296,8 @@ void AskServerForProgram(string programName, char *server_ip, int port, string e
     
     int conn = -1;
     char array[200] = "";
-    char arrayNew[1000] = "";
-    char arrayPrev[1000] = "";
+    char arrayNew[700] = "";
+    char arrayPrev[700] = "";
     char c = 'a';
     string request = "";
     FILE *file;
@@ -320,15 +320,16 @@ void AskServerForProgram(string programName, char *server_ip, int port, string e
         strcpy(array, request.c_str());
         sock.send(array, sizeof(array));  
         
+        file = fopen((pathSentToMachineSD + programName + "withMess" +  extension).c_str(), "a");
+        if(file == NULL) {
+            SomethingWrongWithSD();
+        }
+        
         //przechwyc odpowiedz z Servera
         while(1){
-            file = fopen((pathSentToMachineSD + programName + "withMess" +  extension).c_str(), "a");
-            //file = fopen((pathSentToMachineSD + programName +  extension).c_str(), "a");
-            if(file == NULL) {
-                SomethingWrongWithSD();
-            }
+
             sock.recv(arrayNew, sizeof arrayNew);
-            pc.printf("\n ARRAY - %s \n", arrayNew);
+            //pc.printf("\n ARRAY - %s \n", arrayNew);
             
             fprintf(file, "%s", arrayNew);
             
