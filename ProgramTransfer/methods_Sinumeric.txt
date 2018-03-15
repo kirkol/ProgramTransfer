@@ -79,7 +79,7 @@ void ReconnectIfNoNet(){
     led4 = 0; ledCzerwona = 0; ledZolta = 0;
 }
 
-// usuwa z pliku nagolwki z Servera, oraz nadmiarowa tresc po M30 lub M17 lub M02
+// usuwa z pliku nagolwki z Servera, oraz nadmiarowa tresc po M30 lub M17 lub M02 lub M90
 void CleanTheMessInFile(string pathSentToMachineSD, string programName, string extension){
     
     pc.printf("\nWESZLO\n");
@@ -122,7 +122,7 @@ void CleanTheMessInFile(string pathSentToMachineSD, string programName, string e
         if(writeFlag){ // true ,gdy znaki naleza do programu
             fputc(c, fileNew);
         }
-        if(signalShort == "M30" || signalShort == "M17" || signalShort == "M02"){ // jesli pojawi sie M30 lub M17 lub M02, to znak, ze program sie skonczyl
+        if(signalShort == "M30" || signalShort == "M17" || signalShort == "M02" || signalShort == "M90"){ // jesli pojawi sie M30 lub M17 lub M02, to znak, ze program sie skonczyl
             fputc(13, fileNew);
             fputc(10, fileNew);
             fputc('%', fileNew); // po wychwyceniu konca programu dodaj jeszcze 13, 10 i %
