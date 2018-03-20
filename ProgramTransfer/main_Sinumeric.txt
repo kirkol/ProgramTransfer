@@ -2,13 +2,31 @@
 #include "mbed.h"
 #include "EthernetInterface.h"
 #include "methods.h"
-#include "Socket.h" 
+#include "Socket.h"
 #include "TCPSocket.h"
 
 #define rts p22
 #define cts p17
 
 // UWAGI OGOLNE: Wszystkie programy musza byc ciagiem 4 cyfr! 555 - zle, 0555 - dobrze
+
+// UWAGI OGOLNE DLA SINUMERICA:
+// Maszyna poprzedza wysylanie programu ciagiem ~140-170 nulli
+// Po nich nastepuje wyslanie wlasciwej tresci programu
+// a po zakonczeniu programu wyslana zostaje kolejna seria 140-170 nulli
+
+// Strerownik wychwytuje pierwsza serie nulli i w tym czasie otwiera plik o nazwie "NazwaPliku" do zapisu na sd/receivedFromMachine
+// kazdy kolejny znak wyslany przez maszyne jest teraz zapisywany bezposrednio na karcie SD
+// gdy nastapi kolejna (konczaca) seria nulli nastepuje zamkniecie pliku.
+// Po tej operacji, wywolana zostaje funkcja pobrania nazwy programu z tresci pliku (nastepuje zmiana nazwy z "NazwaPliku" na wlasciwa nazwe programu)
+// a nastepnie funkcja "czyszczaca" (nulle zapisuja sie w pliku jako znak ~ (tylda)), ktora usuwa wszystkie ~ z pliku
+// Ostatecznie plik zostaje wyslany na Server (miganie led3 oznacza, ze plik jest w trakcie wysylania)
+
+// Sterownik nasluchuje tez sygnalow od maszyny tj. programu 5002 (wysyla zapytanie na Server o okreslony program) lub 5005 (wysyla zapytanie do SD/archive o okreslony program)
+// Jesli operator wysle taki program, to sterownik przechwytuje jego tresc, a nastepnie odczytuje z niego jaki program ma zostac pobrany na maszyne
+// Operator po wyslaniu takiego programu ma 30sek na ustawienie maszyny w tryb odbioru (DIO)
+// Po tym czasie (jesli 5002) Server wysle plik na sd/sentToMachine, nastepnie zostanie wywolana funkcja "czyszczaca" (usuniete zostana dodatkowe dane otrzymane z Servera (naglowki))
+// i plik zostanie wyslany z sd/sendToMachine bezposrednio na maszyne. W przypadku programu 5005 sterownik nie laczy sie z Serverem, tylko (jesli istnieje) wysyla plik bezposrednio z sd/archive
 
 // UWAGI DO PROGRAMOW DLA SINUMERICA:
 // 5002 - nazwa programu, w ktorym umieszcza sie nr programu, ktory chcemy sciagnac z servera

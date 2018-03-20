@@ -28,24 +28,18 @@
 
 int main() {
     
+    char *server_ip = "192.168.90.35";
+    int port = 80;
     int i = 0;
-    int j = 0;
     char a = 'a';
     string a1 = "a";
     string signal = "aaaaa";
-    bool WriteOnSDFlag = false; // jesli jest sygnal od maszyny, ze zaczyna nadawanie (w Scharmannie: duzo znakow NULL na poczatku) to flaga = true, jesli jest sygnal od maszyny, ze konczy nadawanie (w Scharmannie: tez duzo znakow NULL na koncu) to flaga = false
-    string ProgramName = "";
-    FILE *fp;
-    char *server_ip = "192.168.90.35";
-    int port = 80;
-    string extension = ".txt";
+    string programName = "";
+    bool CatchProgramName = false;
+    bool WriteOnSDFlag = false;
     string SD_rec_From_Machine_Path = "/sd/receivedFromMachine/";
-    string SD_sent_To_Machine_Path = "/sd/sentToMachine/";
-    string SD_archive = "/sd/Archive/";
-    string requestedProgram = "";
-    string requestedArchiveProgram = "";
-    bool RequestForProgramFlag = false; // jesli jest sygnal od maszyny, ze wywolano program 5002, to flaga = true
-    bool RequestArchiveForProgramFlag = false; // jesli jest sygnal od maszyny, ze wywolano program 5005, to flaga = true
+    string extension = ".txt";
+    FILE *fp;
     
     // polacz z netem
     eth.connect();
@@ -63,7 +57,6 @@ int main() {
     
     // ustawienie RS232
     uart.baud(1200);
-    uart.set_flow_control(Serial::RTSCTS, rts, cts); 
     uart.format(7, Serial::Even, 2);
     
     uart.printf("Jestem dobrym UARTEM");
@@ -73,12 +66,12 @@ int main() {
     //
     //
     //
-    while(1) {
-        
+    while(1){
+    
         i++;
         i = CheckMbedIsStillAlive(&i); // mrugnij czasem dioda 1, zeby pokazac, ze sterownik zyje i ma sie dobrze
         
-        while(!ether.link()){ // sprawdzaj czy jest net, jak nie, to sprobuj polaczyc i zapal led4, czerwona i zolta, a jesli sie polaczysz, to wygas ledy
+        while(!ether.link()){ // sprawdzaj czy jest net, jak nie, to sprobuj polaczyc i zapal led4, czerwona i zolta, a jesli sie polaczysz, to wygas ledy i lec dalej
             ReconnectIfNoNet();
         }
             
@@ -92,82 +85,40 @@ int main() {
             a = uart.getc();
             pc.printf("%c",a);
             
-            // wychwytuje sygnaly komunikacyjne (np. sygnal startu/konca nadawania (5xNULL dla Scharmanna), sygnaly komunikacyjne (np. program sciagajacy programy z serwera %5002 lub O5002) itp.)
+            // wychwytuje sygnaly komunikacyjne (np. program sciagajacy programy z serwera 5002 lub 5005) itp.)
             //pc.printf("\n signal: %s \n", signal);
             a1 = string(1, a);
             signal = signal + a1;
             signal = signal.substr(1,6);
             
-            // licz ile razy pojawil sie sygnal ~~~~~
-            // jesli pojawil sie 100 razy, to znaczy, ze zaczela sie transmisja, jesli pojawil znowu, to znaczy, ze transmisja sie zakonczyla
-            if(signal == "~~~~~"){
-                j++;
-            }else{
-                j = 0;
+            if(a == 18){ // sygnal, ze maszyna zaczyna nadawac program
+                CatchProgramName = true;
             }
             
-            // sygnal rozpoczecia lub zakonczenia transmisji danych (wg Siemensa)
-            if(signal == "N1N1N"){
-                signal = "aaaaa";
-                pc.printf("A LOT OF N1-S!");
-                WriteOnSDFlag = !WriteOnSDFlag; // zmienna odpowiedzialna za "wyczucie" czy to poczatek pliku (pierwsza seria NULLi), czy koniec pliku (druga seria NULLi) 
-                if(WriteOnSDFlag){ // jesli NULLe na poczatku, to tworzy lub otwiera plik
-                    fp = fopen((SD_rec_From_Machine_Path+"NazwaPliku"+extension).c_str(), "w"); // jesli nie ma, to stworz plik, jesli jest, to dodaj kolejne znaki.
-                    if(fp == NULL) {
-                        SomethingWrongWithSD();
+            if(CatchProgramName){ // pobiera z programu pierwsze 4 znaki, ktore sa cyframi
+                if(isdigit(a)){
+                    programName = programName + a;
+                    if(programName.length() == 4){
+                        fp = fopen((SD_rec_From_Machine_Path + programName + "WithMess" + extension).c_str(), "w"); 
+                        CatchProgramName = false;
+                        WriteOnSDFlag = true; // po pobraniu nr programu kolejne znaki beda zapisywaly sie na SD
                     }
-                    pc.printf("FILE OPENED");
-                }
-                if(!WriteOnSDFlag && !RequestForProgramFlag && !RequestArchiveForProgramFlag){ // jesli NULLe na koncu, to zamyka plik + zaczyna procedure wysylania programu z SD na serwer
-                    fclose(fp);
-                    ProgramName = RenameFile(SD_rec_From_Machine_Path, extension); // odszukuje nazwe programu z pliku (szuka 4 pierwszych CYFR w programie i traktuje je jako jego nazwe)
-                    RemoveTildas(ProgramName, SD_rec_From_Machine_Path, extension); // jesli po rozpoczeciu zapisu maszyna jeszcze chwile wysylala NULLe (ktore zostaly zamienione na tyldy), to tu nastepuje ich usuniecie
-                    pc.printf("FILE IS ON SD");
-                    Send_From_SD_to_Server_HTTP(ProgramName, server_ip, port, SD_rec_From_Machine_Path, extension); // wysylanie programu z SD na Server (ProgramsExchange/receivedFromMachine) linia po linii
                 }
             }
             
-            // jesli plik jest otwarty, to kolejne znaki zapisuj do pliku na SD
             if(WriteOnSDFlag){
                 fprintf(fp,"%c", a);
             }
             
-            // sygnal do pobrania pliku z Servera (w tresci programu 5002 musi znajdowac sie nr programu, ktory chcemy pobrac)
-            if(signal == "O5002"){
-                RequestForProgramFlag = true;
+            if(strstr(signal.c_str(), "M30") || strstr(signal.c_str(), "M02") || strstr(signal.c_str(), "M90") || strstr(signal.c_str(), "M17")){
+                signal = "aaaaa";
                 fclose(fp);
-                a = 'a';
-            }
-            if(RequestForProgramFlag){
-                if(isdigit(a)){ // szuka pierwszych 4 cyfr po O5002 i traktuje je jako nr programu
-                    requestedProgram = requestedProgram + a;
-                }
-                if(requestedProgram.length() == 4){
-                    AskServerForProgram(requestedProgram, server_ip, port, extension, SD_sent_To_Machine_Path, SD_archive); // wysyla zapytanie o program do Servera (gdy operator uzyl programu 5002) - w czasie "rzeczywistym" (no, prawie) i wysyla plik z Serwera na SD (do sd/sentToMachine i sd/archive), a nastepnie z SD na maszyne
-                    requestedProgram = "";
-                    RequestForProgramFlag = false;  
-                    WriteOnSDFlag = false; // ta instrukcja zostala dodana, poniewaz AskServerForProgram trwa zbyt dlugo i sterownik nie wychwytuje NULLi konczacych program
-                }
+                CleanMessInFile(SD_rec_From_Machine_Path, extension, programName); // usuwa wszystko co przed N1;, wszystkie N1; i do poczatku pliku dopisuje nazwe programu  
+                pc.printf("FILE IS ON SD");
             }
             
-            // sygnal do pobrania pliku z /sd/archive/ (w tresci programu 5005 musi znajdowac sie nr programu, ktory chcemy pobrac)
-            if(signal == "O5005"){
-                RequestArchiveForProgramFlag = true;
-                fclose(fp);
-                a = 'a';
-            }
-            if(RequestArchiveForProgramFlag){
-                if(isdigit(a)){ // szuka pierwszych 4 cyfr po O5005 i traktuje je jako nr programu
-                    requestedArchiveProgram = requestedArchiveProgram + a;
-                }
-                if(requestedArchiveProgram.length() == 4){
-                    wait(30); // czeka 30sek, daje czas operatorowi na przygotowanie maszyny w stan odbioru programu (DIO)
-                    AskArchiveForProgram(SD_archive, requestedArchiveProgram, extension); // wysyla zapytanie do folderu /sd/archive o program (gdy operator uzyl programu 5005) - w czasie "rzeczywistym" (no, prawie) i wysyla plik z /sd/archive na maszyne (plik po przeslaniu nadal zostaje w /sd/archive)
-                    requestedArchiveProgram = "";
-                    RequestArchiveForProgramFlag = false;  
-                    WriteOnSDFlag = false; // ta instrukcja zostala dodana, poniewaz AskServerForProgram trwa zbyt dlugo i sterownik nie wychwytuje NULLi konczacych program
-                }
-            }    
-        }
+        } 
+    
     }
+    
 }
