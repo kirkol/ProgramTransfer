@@ -34,7 +34,7 @@ FATFileSystem fs("sd", &sd);
 void SocketOK(){
     
     pc.printf("\n SOCKET OPENED \n");
-    led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0; wait(0.2); led1 = 1; wait(0.2); led1 = 0;
+    led1 = 1; wait(0.05); led1 = 0; wait(0.05); led1 = 1; wait(0.05); led1 = 0; wait(0.05); led1 = 1; wait(0.05); led1 = 0;
 }
 
 // mruga diodami i wyswietla, ze NIE udalo sie nawiazac polaczenia z Socketem
@@ -122,7 +122,7 @@ void CleanTheMessInFile(string pathSentToMachineSD, string programName, string e
         if(writeFlag){ // true ,gdy znaki naleza do programu
             fputc(c, fileNew);
         }
-        if(signalShort == "M30" || signalShort == "M17" || signalShort == "M02" || signalShort == "M90"){ // jesli pojawi sie M30 lub M17 lub M02, to znak, ze program sie skonczyl
+        if(signalShort == "M30" || signalShort == "M17" || signalShort == "M02" || signalShort == "M90"){ // jesli pojawi sie M30 lub M17 lub M02 lub M90, to znak, ze program sie skonczyl
             fputc(13, fileNew);
             fputc(10, fileNew);
             fputc('%', fileNew); // po wychwyceniu konca programu dodaj jeszcze 13, 10 i %
@@ -151,7 +151,7 @@ void CleanTheMessInFile(string pathSentToMachineSD, string programName, string e
 }
 
 //wysyla program na serwer przez HTTP
-void Send_From_SD_to_Server_HTTP (string ProgramName, char *server_ip, int port, string path, string extension){
+void Send_From_SD_to_Server_HTTP (string ProgramName, char *server_ip, int port, string path, string extension, string ID_OF_MACHINE){
     
     FILE *file;
     string line = "";
@@ -167,7 +167,7 @@ void Send_From_SD_to_Server_HTTP (string ProgramName, char *server_ip, int port,
     conn = sock.connect(server_ip, port);
     if(conn == 0){
         SocketOK();
-        request = "GET /delete_if_exist.php?program_name=" + ProgramName + "&extension=" + extension + " HTTP/1.0\r\n\r\n";
+        request = "GET /delete_if_exist.php?program_name=" + ProgramName + "&extension=" + extension + "&machineFolder=" + ID_OF_MACHINE + " HTTP/1.0\r\n\r\n";
         strcpy(array, request.c_str());
         sock.send(array, sizeof(array));  
     }else{
@@ -197,7 +197,7 @@ void Send_From_SD_to_Server_HTTP (string ProgramName, char *server_ip, int port,
           if(c ==10){  
             pc.printf("%s", line);
             pc.printf("\n");
-            request = "GET /send_file_to_server_HTTP.php?program_name=" + ProgramName + "&extension=" + extension + "&line=" + line + " HTTP/1.0\r\n\r\n";
+            request = "GET /send_file_to_server_HTTP.php?program_name=" + ProgramName + "&extension=" + extension + "&machineFolder=" + ID_OF_MACHINE + "&line=" + line + " HTTP/1.0\r\n\r\n";
             strcpy(array, request.c_str());
             pc.printf("%s", array);
             pc.printf("\n");
@@ -292,7 +292,7 @@ void RemoveTildas(string programName, string path, string extension){
 }
 
 // wysyla zapytanie o program do Servera (gdy operator uzyl programu 5002) - w czasie "rzeczywistym" (no, prawie) i wysyla plik z Serwera na SD (do sd/sentToMachine i sd/archive), a nastepnie z SD na maszyne
-void AskServerForProgram(string programName, char *server_ip, int port, string extension, string pathSentToMachineSD, string pathArchive){
+void AskServerForProgram(string programName, char *server_ip, int port, string extension, string pathSentToMachineSD, string pathArchive, string ID_OF_MACHINE){
     
     int conn = -1;
     char array[200] = "";
@@ -315,7 +315,7 @@ void AskServerForProgram(string programName, char *server_ip, int port, string e
         SocketOK();
         //usun poprzedni plik z programem z karty SD, jesli istnieje (w sendToMachine zawsze zostaje najaktualniejszy)
         remove((pathSentToMachineSD + programName + extension).c_str());
-        request = "GET /ProgramsExchange/sentToMachine/" + programName + extension + " HTTP/1.0\r\n\r\n";
+        request = "GET /ProgramsExchange/" + ID_OF_MACHINE + "/sentToMachine/" + programName + extension + " HTTP/1.0\r\n\r\n";
         pc.printf("%s", request);
         strcpy(array, request.c_str());
         sock.send(array, sizeof(array));  
@@ -342,7 +342,7 @@ void AskServerForProgram(string programName, char *server_ip, int port, string e
             
         }
         fclose(file);
-        pc.printf("\n PLIK ZAPISANO NA SERVERZE\n");
+        pc.printf("\n PLIK ZAPISANO NA SD/sentToMachine\n");
         
         //usuwa z pliku nagolwki z Servera, oraz nadmiarowa tresc po M30
         CleanTheMessInFile(pathSentToMachineSD, programName, extension);
@@ -376,7 +376,7 @@ void AskServerForProgram(string programName, char *server_ip, int port, string e
             c = fgetc(file);
             uart.putc(c);
             led3 = 1;
-            wait(0.03);
+            wait(0.03); // to opoznienie jest z uwagi na to, ze sterownik za szybko wysyla dane (maszyna potrzebuje chwili po kazdym znaku)
             led3 = 0;
         }
         fclose(file);

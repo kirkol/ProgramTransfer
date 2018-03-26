@@ -3,8 +3,6 @@
 #define rts p22
 #define cts p17
 
-// PROGRAM DO BEZPOSREDNIEGO POBIERANIA/WYSYLANIA ZNAKOW Z I DO MASZYNY - 
-
 // debbuging (diody na sterowniku)
 DigitalOut led1(LED1);
 DigitalOut led2(LED2);
@@ -28,9 +26,9 @@ int main() {
     int i = 0;
     
 //    // ustawienie RS232
-    uart.baud(2400);
+    uart.baud(9600);
     uart.format(7, Serial::Even, 2);
-    //uart.set_flow_control(Serial::RTSCTS, rts, cts);
+//    uart.set_flow_control(Serial::RTSCTS, rts, cts);
     
     //uart.printf("Jestem dobrym UARTEM");
     pc.printf("Jestem dobrym PCtem");
@@ -47,16 +45,16 @@ int main() {
         }
         i++;
             
-        if(pc.readable()) {       // sprawdza czy jest cos na pinie rx w USB - gniazdo miniUSB (Z PC NA MASZYNE)
+        if(pc.readable()) {       // sprawdza czy jest cos na pinie rx w USB - miniUSB w mbedzie (Z PC NA MASZYNE)
             a = pc.getc();                          
             led1 = !led1;
             uart.putc(a);
-            pc.printf("%c",a);      // wyswietla znaki w ASCII
+            pc.printf("%c",a);
         }
-        if(uart.readable()) {    // sprawdza czy jest cos na pinie rx w uarcie - pin 14 (Z MASZYNY NA PC)
+        if(uart.readable()) {    // sprawdza czy jest cos na pinie rx - pin p14  (Z MASZYNY NA PC)
             a = uart.getc();
             led2 = !led2;
-            pc.printf("%d ",a);  // wyswietla znaki w zapisie DECymalnym
+            pc.printf("%d",a);
         }
     }
 }

@@ -48,6 +48,7 @@
 
 int main() {
     
+    const string ID_OF_MACHINE = "TN12"; // DO TEGO FOLDERU BEDZIE ODWOLYWAL SIE PROGRAM!!! JESLI STEROWNIK PODPIETY JEST POD INNA MASZYNE ZMIEN TA NAZWE I UTWORZ TAKI FOLDER NA SERWERZE MASZYN!!!
     int i = 0;
     int j = 0;
     char a = 'a';
@@ -56,7 +57,7 @@ int main() {
     bool WriteOnSDFlag = false; // jesli jest sygnal od maszyny, ze zaczyna nadawanie (w Scharmannie: duzo znakow NULL na poczatku) to flaga = true, jesli jest sygnal od maszyny, ze konczy nadawanie (w Scharmannie: tez duzo znakow NULL na koncu) to flaga = false
     string ProgramName = "";
     FILE *fp;
-    char *server_ip = "192.168.90.35";
+    char *server_ip = "192.168.90.33";
     int port = 80;
     string extension = ".txt";
     string SD_rec_From_Machine_Path = "/sd/receivedFromMachine/";
@@ -146,7 +147,7 @@ int main() {
                     ProgramName = RenameFile(SD_rec_From_Machine_Path, extension); // odszukuje nazwe programu z pliku (szuka 4 pierwszych CYFR w programie i traktuje je jako jego nazwe)
                     RemoveTildas(ProgramName, SD_rec_From_Machine_Path, extension); // jesli po rozpoczeciu zapisu maszyna jeszcze chwile wysylala NULLe (ktore zostaly zamienione na tyldy), to tu nastepuje ich usuniecie
                     pc.printf("FILE IS ON SD");
-                    Send_From_SD_to_Server_HTTP(ProgramName, server_ip, port, SD_rec_From_Machine_Path, extension); // wysylanie programu z SD na Server (ProgramsExchange/receivedFromMachine) linia po linii
+                    Send_From_SD_to_Server_HTTP(ProgramName, server_ip, port, SD_rec_From_Machine_Path, extension, ID_OF_MACHINE); // wysylanie programu z SD na Server (ProgramsExchange/receivedFromMachine) linia po linii
                 }
             }
             
@@ -166,7 +167,7 @@ int main() {
                     requestedProgram = requestedProgram + a;
                 }
                 if(requestedProgram.length() == 4){
-                    AskServerForProgram(requestedProgram, server_ip, port, extension, SD_sent_To_Machine_Path, SD_archive); // wysyla zapytanie o program do Servera (gdy operator uzyl programu 5002) - w czasie "rzeczywistym" (no, prawie) i wysyla plik z Serwera na SD (do sd/sentToMachine i sd/archive), a nastepnie z SD na maszyne
+                    AskServerForProgram(requestedProgram, server_ip, port, extension, SD_sent_To_Machine_Path, SD_archive, ID_OF_MACHINE); // wysyla zapytanie o program do Servera (gdy operator uzyl programu 5002) - w czasie "rzeczywistym" (no, prawie) i wysyla plik z Serwera na SD (do sd/sentToMachine i sd/archive), a nastepnie z SD na maszyne
                     requestedProgram = "";
                     RequestForProgramFlag = false;  
                     WriteOnSDFlag = false; // ta instrukcja zostala dodana, poniewaz AskServerForProgram trwa zbyt dlugo i sterownik nie wychwytuje NULLi konczacych program
